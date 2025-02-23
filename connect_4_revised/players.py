@@ -102,115 +102,116 @@ class minimaxAI(connect4Player):
 	implements the minimiax algorithm WITHOUT alpha-beta pruning
 	'''
 
-	def evaluationFunction(env: connect4) -> int:
-		player = env.turnPlayer
-		_,numCols = env.shape
-		for col in range(0,numCols):
-			pos = env.topPosition[col]
-			# vertical
-			count = 0
-			for i in range(1,3):
-				if env.board[col][pos-i] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break				
-			
-			# horizontal
-			count = 0
-			for i in range(1,3):
-				if env.board[col+i][pos] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
-				
-			for i in range(1,3):
-				if env.board[col-i][pos] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
-				
-			#diagonal ascending
-			count = 0
-			for i in range(1,3):
-				if env.board[col+i][pos+i] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
-			for i in range(1,3):
-				if env.board[col-i][pos-i] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
+	def evaluationFunction(self, env: connect4) -> int:
+		player = self.position
+		opponent = 3 - player  # Assuming player 1 and 2 are the only players
+		score = 0
 
-				
-			#diagonal descending
-			count = 0
-			for i in range(1,3):
-				if env.board[col+i][pos-i] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
-			for i in range(1,3):
-				if env.board[col-i][pos+i] == player:
-					count += 1
-					if count >= 3:
-						return 1000
-				else:
-					break
-		return 0
+		# Check all possible 4-in-a-row sequences
+		for row in range(env.shape[0]):
+			for col in range(env.shape[1]):
+				# horizontal
+				if col + 3 < env.shape[1]:
+					window = [env.board[row][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# vertical
+				if row + 3 < env.shape[0]:
+					window = [env.board[row + i][col] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal ascending
+				if row + 3 < env.shape[0] and col + 3 < env.shape[1]:
+					window = [env.board[row + i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal descending
+				if row - 3 >= 0 and col + 3 < env.shape[1]:
+					window = [env.board[row - i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+		return score
 	
-	def simulateMove(env: connect4, column, position):
-		env.board[column][env.topPosition[column]] = env.turnPlayer
+	def computeScore(self, window, player, opponent):
+		score = 0
+		if window.count(player) == 4:
+			score += 100
+		elif window.count(player) == 3 and window.count(0) == 1:
+			score += 5
+		elif window.count(player) == 2 and window.count(0) == 2:
+			score += 2
+
+		if window.count(opponent) == 3 and window.count(0) == 1:
+			score -= 4
+
+		return score
+	
+	def simulateMove(self, env: connect4, column):
+		if env.topPosition[column] >= 0:
+			env.board[env.topPosition[column]][column] = self.position
+			env.topPosition[column] -= 1
 	
 	def MAX(self, env: connect4, depth):
-		if env.gameOver():
+		player = env.turnPlayer.position 
+		move = env.playTurn()
+		if env.gameOver(move, player):
 			return -np.inf
 		if depth == 0:
-			return self.evaluationFunction(env.board)
+			return self.evaluationFunction(env)
+		
 		possible = env.topPosition >= 0 # which columns have empty spaces
 		indices = []
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
+		
 		value = -np.inf
 		for column in indices:
 			envCopy = copy.deepcopy(env)
-			self.simulateMove(envCopy, column, self.position)
+			self.simulateMove(envCopy, column)
 			value = max(value, self.MIN(envCopy, depth-1))
+			
 		return value
 		
 	def MIN(self, env: connect4, depth):
-		if env.gameOver():
+		player = env.turnPlayer.position 
+		move = env.playTurn()
+		if env.gameOver(move, player):
 			return np.inf
 		if depth == 0:
-			return self.evaluationFunction(env.board)
+			return self.evaluationFunction(env)
+		
 		possible = env.topPosition >= 0 # which columns have empty spaces
 		indices = []
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
+
 		value = np.inf
 		for column in indices:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column, self.position)
 			value = max(value, self.MAX(envCopy, depth-1))
+
 		return value
 
 
 	def play(self, env: connect4, move_dict: dict) -> None:
+		bestValue = -np.inf
+		bestMove = None
 		maxDepth = 2
-		self.MAX(env, maxDepth)
-		move_dict[:] = [3]
+
+		possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = []
+		for i, p in enumerate(possible):
+			if p: indices.append(i)
+
+		for column in indices:
+			envCopy = copy.deepcopy(env)
+			self.simulateMove(envCopy, column)
+			value = self.MAX(env, maxDepth)
+			if value > bestValue:
+				bestValue = value
+				bestMove = column
+		move_dict["move"] = bestMove
 		print("I finished")
 
 		
@@ -228,8 +229,121 @@ class alphaBetaAI(connect4Player):
 	implements the minimiax algorithm WITH alpha-beta pruning
 	'''
 	
+	def evaluationFunction(self, env: connect4) -> int:
+		player = self.position
+		opponent = 3 - player  # Assuming player 1 and 2 are the only players
+		score = 0
+
+		# Check all possible 4-in-a-row sequences
+		for row in range(env.shape[0]):
+			for col in range(env.shape[1]):
+				# horizontal
+				if col + 3 < env.shape[1]:
+					window = [env.board[row][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# vertical
+				if row + 3 < env.shape[0]:
+					window = [env.board[row + i][col] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal ascending
+				if row + 3 < env.shape[0] and col + 3 < env.shape[1]:
+					window = [env.board[row + i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal descending
+				if row - 3 >= 0 and col + 3 < env.shape[1]:
+					window = [env.board[row - i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+		return score
+	
+	def computeScore(self, window, player, opponent):
+		score = 0
+		if window.count(player) == 4:
+			score += 100
+		elif window.count(player) == 3 and window.count(0) == 1:
+			score += 5
+		elif window.count(player) == 2 and window.count(0) == 2:
+			score += 2
+
+		if window.count(opponent) == 3 and window.count(0) == 1:
+			score -= 4
+
+		return score
+	
+	def simulateMove(self, env: connect4, column):
+		if env.topPosition[column] >= 0:
+			env.board[env.topPosition[column]][column] = self.position
+			env.topPosition[column] -= 1
+	
+	def MAX(self, env: connect4, depth, alpha, beta):
+		player = env.turnPlayer.position 
+		move = env.playTurn()
+		if env.gameOver(move, player):
+			return -np.inf
+		if depth == 0:
+			return self.evaluationFunction(env)
+		
+		possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = []
+		for i, p in enumerate(possible):
+			if p: indices.append(i)
+		
+		value = -np.inf
+		for column in indices:
+			envCopy = copy.deepcopy(env)
+			self.simulateMove(envCopy, column)
+			value = max(value, self.MIN(envCopy, depth-1, alpha, beta))
+			if value >= beta: return value
+			alpha = max(alpha, value)
+			
+		return value
+		
+	def MIN(self, env: connect4, depth, alpha, beta):
+		player = env.turnPlayer.position 
+		move = env.playTurn()
+		if env.gameOver(move, player):
+			return np.inf
+		if depth == 0:
+			return self.evaluationFunction(env)
+		
+		possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = []
+		for i, p in enumerate(possible):
+			if p: indices.append(i)
+
+		value = np.inf
+		for column in indices:
+			envCopy = copy.deepcopy(env)
+			self.simulateMove(envCopy, column, self.position)
+			value = max(value, self.MAX(envCopy, depth-1, alpha, beta))
+			if value <= alpha: return value
+			beta = min(beta, value)
+
+		return value
+
+
 	def play(self, env: connect4, move_dict: dict) -> None:
-		pass
+		bestValue = -np.inf
+		bestMove = 3
+		maxDepth = 2
+
+		possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = []
+		for i, p in enumerate(possible):
+			if p: indices.append(i)
+		
+		for column in indices:
+			envCopy = copy.deepcopy(env)
+			self.simulateMove(envCopy, column)
+			value = self.MAX(env, maxDepth, -np.inf, np.inf)
+			if value > bestValue:
+				bestValue = value
+				bestMove = column
+		move_dict["move"] = bestMove
+		print("I finished")
 
 # Defining Constants
 SQUARESIZE = 100
