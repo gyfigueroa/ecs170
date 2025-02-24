@@ -5,6 +5,7 @@ import math
 from connect4 import connect4
 import sys
 import copy
+import time
 
 class connect4Player(object):
 	def __init__(self, position, seed=0, CVDMode=False):
@@ -214,24 +215,14 @@ class minimaxAI(connect4Player):
 		move_dict["move"] = bestMove
 		print("I finished")
 
-		
-
-
-	
-
-
-
-	
-
 class alphaBetaAI(connect4Player):
-	'''
-	This is where you will design a connect4Player that 
-	implements the minimiax algorithm WITH alpha-beta pruning
-	'''
-	
+	def __init__(self, position, seed=0, CVDMode=False):
+		super().__init__(position, seed, CVDMode)
+		self.maxDepth = 3  # Start with a shallow depth
+
 	def evaluationFunction(self, env: connect4) -> int:
 		player = self.position
-		opponent = 3 - player  # Assuming player 1 and 2 are the only players
+		opponent = 3 - player
 		score = 0
 
 		# Check all possible 4-in-a-row sequences
@@ -258,11 +249,11 @@ class alphaBetaAI(connect4Player):
 					score += self.computeScore(window, player, opponent)
 
 		return score
-	
+
 	def computeScore(self, window, player, opponent):
 		score = 0
 		if window.count(player) == 4:
-			score += 100
+			score += 1000
 		elif window.count(player) == 3 and window.count(0) == 1:
 			score += 5
 		elif window.count(player) == 2 and window.count(0) == 2:
@@ -272,17 +263,15 @@ class alphaBetaAI(connect4Player):
 			score -= 4
 
 		return score
-	
+
 	def simulateMove(self, env: connect4, column):
 		if env.topPosition[column] >= 0:
 			env.board[env.topPosition[column]][column] = self.position
 			env.topPosition[column] -= 1
-	
-	def MAX(self, env: connect4, depth, alpha, beta):
-		player = env.turnPlayer.position 
-		move = env.playTurn()
-		if env.gameOver(move, player):
-			return -np.inf
+
+	def MAX(self, env: connect4, depth, alpha, beta, move_dict: dict):
+		#if env.gameOver(move_dict["move"], self.position):
+		#	return -np.inf
 		if depth == 0:
 			return self.evaluationFunction(env)
 		
@@ -295,17 +284,15 @@ class alphaBetaAI(connect4Player):
 		for column in indices:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
-			value = max(value, self.MIN(envCopy, depth-1, alpha, beta))
+			value = max(value, self.MIN(envCopy, depth-1, alpha, beta, move_dict))
 			if value >= beta: return value
 			alpha = max(alpha, value)
 			
 		return value
 		
-	def MIN(self, env: connect4, depth, alpha, beta):
-		player = env.turnPlayer.position 
-		move = env.playTurn()
-		if env.gameOver(move, player):
-			return np.inf
+	def MIN(self, env: connect4, depth, alpha, beta, move_dict: dict):
+		#if env.gameOver(move_dict["move"], self.position):
+		#	return np.inf
 		if depth == 0:
 			return self.evaluationFunction(env)
 		
@@ -317,8 +304,8 @@ class alphaBetaAI(connect4Player):
 		value = np.inf
 		for column in indices:
 			envCopy = copy.deepcopy(env)
-			self.simulateMove(envCopy, column, self.position)
-			value = max(value, self.MAX(envCopy, depth-1, alpha, beta))
+			self.simulateMove(envCopy, column)
+			value = min(value, self.MAX(envCopy, depth-1, alpha, beta, move_dict))
 			if value <= alpha: return value
 			beta = min(beta, value)
 
@@ -326,24 +313,29 @@ class alphaBetaAI(connect4Player):
 
 
 	def play(self, env: connect4, move_dict: dict) -> None:
-		bestValue = -np.inf
-		bestMove = 3
-		maxDepth = 2
+		bestMove = 3  # Default move
+		#start_time = time.time()
+		maxDepth = 2  # Start with a shallow depth
 
-		possible = env.topPosition >= 0 # which columns have empty spaces
-		indices = []
-		for i, p in enumerate(possible):
-			if p: indices.append(i)
-		
-		for column in indices:
+		if np.all(env.topPosition < 0):
+			print("BOARD IS FULL ---------------------------")
+			#move_dict["move"] = -1  # No valid moves left
+			return
+
+		#while time.time() - start_time < 2.5:  # Leave some buffer time
+		bestValue = -np.inf
+		for column in [i for i, p in enumerate(env.topPosition >= 0) if p]:
 			envCopy = copy.deepcopy(env)
-			self.simulateMove(envCopy, column)
-			value = self.MAX(env, maxDepth, -np.inf, np.inf)
-			if value > bestValue:
-				bestValue = value
-				bestMove = column
+			self.simulateMove(env, column)
+			if envCopy.topPosition[column] >= 0:
+				move_dict['move'] = column
+				value = self.MAX(env, maxDepth, -np.inf, np.inf, move_dict)
+				if value > bestValue:
+					bestValue = value
+					bestMove = column
+		maxDepth += 1  # Increase depth for the next iteration
+
 		move_dict["move"] = bestMove
-		print("I finished")
 
 # Defining Constants
 SQUARESIZE = 100
