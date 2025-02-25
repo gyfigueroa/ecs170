@@ -232,18 +232,18 @@ class alphaBetaAI(connect4Player):
 		super().__init__(position, seed, CVDMode)
 		self.maxDepth = 3  # Start with a shallow depth
 
-	def evaluationFunction2(self, env:connect4) -> int:
-		for col in range(env.shape[1]):
-			row = env.topPosition[col]
-			if row >= 0:
-				return value[row][col]
-
-	def evaluationFunction(self, env: connect4) -> int:
+	def evaluationFunction(self, env: connect4, move_dict:dict) -> int:
 		player = self.position
 		opponent = 3 - player
 		score = 0
 
-		# Positional scoring
+		# Check for immediate wins or losses
+		#if env.gameOver(move_dict["move"], player):  # Check if the player has won
+		#	return 1000  # Highest priority: immediate win
+		#if env.gameOver(move_dict["move"], opponent):  # Check if the opponent has won
+		#	return -100  # Highest priority: block opponent's win
+
+		# Positional scoring using the weight matrix
 		for row in range(env.shape[0]):
 			for col in range(env.shape[1]):
 				if env.board[row][col] == player:
@@ -251,46 +251,27 @@ class alphaBetaAI(connect4Player):
 				elif env.board[row][col] == opponent:
 					score -= value[row][col]
 
-		# Check all possible 4-in-a-row sequences
-		for row in range(env.shape[0]):
-			for col in range(env.shape[1]):
-				# horizontal
-				if col + 3 < env.shape[1]:
-					window = [env.board[row][col + i] for i in range(4)]
-					score += self.computeScore(window, player, opponent)
-
-				# vertical
-				if row + 3 < env.shape[0]:
-					window = [env.board[row + i][col] for i in range(4)]
-					score += self.computeScore(window, player, opponent)
-
-				# diagonal ascending
-				if row + 3 < env.shape[0] and col + 3 < env.shape[1]:
-					window = [env.board[row + i][col + i] for i in range(4)]
-					score += self.computeScore(window, player, opponent)
-
-				# diagonal descending
-				if row - 3 >= 0 and col + 3 < env.shape[1]:
-					window = [env.board[row - i][col + i] for i in range(4)]
-					score += self.computeScore(window, player, opponent)
-
 		return score
 
-	def computeScore(self, window, player, opponent):
-		score = 0
-		if window.count(player) == 4:
-			score += 1000
-		elif window.count(player) == 3 and window.count(0) == 1:
-			score += 100
-		elif window.count(player) == 2 and window.count(0) == 2:
-			score += 10
+	def sortColumnsByValue(self, env: connect4) -> list:
+		"""
+		Sorts columns based on the sum of the positional weights of empty spaces in each column.
+		Columns with higher sums are prioritized.
+		"""
+		column_scores = []
 
-		if window.count(opponent) == 3 and window.count(0) == 1:
-			score -= 200
-		elif window.count(opponent) == 2 and window.count(0) == 2:
-			score -= 20
+		for col in range(env.shape[1]):
+			if env.topPosition[col] >= 0:  # Check if the column is not full
+				row = env.topPosition[col]  # Get the first empty row in the column
+				score = value[row][col]  # Use the positional weight for the empty space
+				column_scores.append((col, score))  # Store column index and its score
 
-		return score
+		# Sort columns by their scores in descending order
+		column_scores.sort(key=lambda x: x[1], reverse=True)
+
+		# Return only the column indices (sorted)
+		return [col for col, score in column_scores]
+
 
 	def simulateMove(self, env: connect4, column):
 		if env.topPosition[column] >= 0:
@@ -298,10 +279,10 @@ class alphaBetaAI(connect4Player):
 			env.topPosition[column] -= 1
 
 	def MAX(self, env: connect4, depth, alpha, beta, move_dict: dict):
-		if env.gameOver(move_dict["move"], self.position):
+		if env.gameOver(move_dict["move"], 3 - self.position):
 			return -np.inf
 		if depth == 0:
-			return self.evaluationFunction(env)
+			return self.evaluationFunction(env, move_dict)
 		
 		possible = env.topPosition >= 0 # which columns have empty spaces
 		indices = []
@@ -309,16 +290,12 @@ class alphaBetaAI(connect4Player):
 			if p: indices.append(i)
 
 		# Sort moves based on their heuristic value (central columns first)
-		indices.sort(key=lambda x: abs(x - 3))
+		sortedColumns = self.sortColumnsByValue(env)
 		
 		value = -np.inf
-		for column in indices:
+		for column in sortedColumns:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
-
-			#if envCopy.topPosition[column] >= 0:
-				#if envCopy.gameOver(column, self.position):
-				#	return -np.inf
 				
 			value = max(value, self.MIN(envCopy, depth-1, alpha, beta, move_dict))
 			if value >= beta: return value
@@ -327,10 +304,10 @@ class alphaBetaAI(connect4Player):
 		return value
 		
 	def MIN(self, env: connect4, depth, alpha, beta, move_dict: dict):
-		if env.gameOver(move_dict["move"], self.position):
+		if env.gameOver(move_dict["move"], 3 - self.position):
 			return np.inf
 		if depth == 0:
-			return self.evaluationFunction(env)
+			return self.evaluationFunction(env, move_dict)
 		
 		possible = env.topPosition >= 0 # which columns have empty spaces
 		indices = []
@@ -338,16 +315,12 @@ class alphaBetaAI(connect4Player):
 			if p: indices.append(i)
 
 		# Sort moves based on their heuristic value (central columns first)
-		indices.sort(key=lambda x: abs(x - 3))
+		sortedColumns = self.sortColumnsByValue(env)
 
 		value = np.inf
-		for column in indices:
+		for column in sortedColumns:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
-
-			#if envCopy.topPosition[column] >= 0:
-				#if envCopy.gameOver(column, self.position):
-				#	return -np.inf
 				
 			value = min(value, self.MAX(envCopy, depth-1, alpha, beta, move_dict))
 			if value <= alpha: return value
@@ -358,10 +331,8 @@ class alphaBetaAI(connect4Player):
 
 	def play(self, env: connect4, move_dict: dict) -> None:
 		bestMove = 3  # Default move
-		#start_time = time.time()
-		maxDepth = 3  # Start with a shallow depth
+		maxDepth = 4  # Start with a shallow depth
 
-		#while time.time() - start_time < 2.5:  # Leave some buffer time
 		bestValue = -np.inf
 		for column in [i for i, p in enumerate(env.topPosition >= 0) if p]:
 			envCopy = copy.deepcopy(env)
