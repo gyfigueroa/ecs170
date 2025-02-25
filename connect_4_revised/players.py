@@ -105,7 +105,7 @@ class minimaxAI(connect4Player):
 
 	def evaluationFunction(self, env: connect4) -> int:
 		player = self.position
-		opponent = 3 - player  # Assuming player 1 and 2 are the only players
+		opponent = 3 - player
 		score = 0
 
 		# Check all possible 4-in-a-row sequences
@@ -132,27 +132,29 @@ class minimaxAI(connect4Player):
 					score += self.computeScore(window, player, opponent)
 
 		return score
-	
+
 	def computeScore(self, window, player, opponent):
 		score = 0
 		if window.count(player) == 4:
-			score += 100
+			score += 1000  # Immediate win
 		elif window.count(player) == 3 and window.count(0) == 1:
-			score += 5
+			score += 100  # Potential win in next move
 		elif window.count(player) == 2 and window.count(0) == 2:
-			score += 2
+			score += 10   # Potential to build a threat
 
 		if window.count(opponent) == 3 and window.count(0) == 1:
-			score -= 4
+			score -= 200  # Block opponent's immediate win
+		elif window.count(opponent) == 2 and window.count(0) == 2:
+			score -= 20   # Block opponent's potential threat
 
 		return score
-	
+
 	def simulateMove(self, env: connect4, column):
 		if env.topPosition[column] >= 0:
 			env.board[env.topPosition[column]][column] = self.position
 			env.topPosition[column] -= 1
 	
-	def MAX(self, env: connect4, depth):
+	def MAX(self, env: connect4, depth, move_dict: dict):
 		player = env.turnPlayer.position 
 		move = env.playTurn()
 		if env.gameOver(move, player):
@@ -160,7 +162,7 @@ class minimaxAI(connect4Player):
 		if depth == 0:
 			return self.evaluationFunction(env)
 		
-		possible = env.topPosition >= 0 # which columns have empty spaces
+		possible = env.topPosition >= 0 
 		indices = []
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
@@ -169,11 +171,11 @@ class minimaxAI(connect4Player):
 		for column in indices:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
-			value = max(value, self.MIN(envCopy, depth-1))
+			value = max(value, self.MIN(envCopy, depth-1, move_dict))
 			
 		return value
 		
-	def MIN(self, env: connect4, depth):
+	def MIN(self, env: connect4, depth, move_dict: dict):
 		player = env.turnPlayer.position 
 		move = env.playTurn()
 		if env.gameOver(move, player):
@@ -181,7 +183,7 @@ class minimaxAI(connect4Player):
 		if depth == 0:
 			return self.evaluationFunction(env)
 		
-		possible = env.topPosition >= 0 # which columns have empty spaces
+		possible = env.topPosition >= 0 
 		indices = []
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
@@ -190,7 +192,7 @@ class minimaxAI(connect4Player):
 		for column in indices:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column, self.position)
-			value = max(value, self.MAX(envCopy, depth-1))
+			value = max(value, self.MAX(envCopy, depth-1, move_dict))
 
 		return value
 
@@ -200,7 +202,7 @@ class minimaxAI(connect4Player):
 		bestMove = None
 		maxDepth = 2
 
-		possible = env.topPosition >= 0 # which columns have empty spaces
+		possible = env.topPosition >= 0 
 		indices = []
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
@@ -232,24 +234,49 @@ class alphaBetaAI(connect4Player):
 		super().__init__(position, seed, CVDMode)
 		self.maxDepth = 3  # Start with a shallow depth
 
-	def evaluationFunction(self, env: connect4, move_dict:dict) -> int:
+	def evaluationFunction(self, env: connect4) -> int:
 		player = self.position
 		opponent = 3 - player
 		score = 0
 
-		# Check for immediate wins or losses
-		#if env.gameOver(move_dict["move"], player):  # Check if the player has won
-		#	return 1000  # Highest priority: immediate win
-		#if env.gameOver(move_dict["move"], opponent):  # Check if the opponent has won
-		#	return -100  # Highest priority: block opponent's win
-
-		# Positional scoring using the weight matrix
+		# Check all possible 4-in-a-row sequences
 		for row in range(env.shape[0]):
 			for col in range(env.shape[1]):
-				if env.board[row][col] == player:
-					score += value[row][col]
-				elif env.board[row][col] == opponent:
-					score -= value[row][col]
+				# horizontal
+				if col + 3 < env.shape[1]:
+					window = [env.board[row][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# vertical
+				if row + 3 < env.shape[0]:
+					window = [env.board[row + i][col] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal ascending
+				if row + 3 < env.shape[0] and col + 3 < env.shape[1]:
+					window = [env.board[row + i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+				# diagonal descending
+				if row - 3 >= 0 and col + 3 < env.shape[1]:
+					window = [env.board[row - i][col + i] for i in range(4)]
+					score += self.computeScore(window, player, opponent)
+
+		return score
+
+	def computeScore(self, window, player, opponent):
+		score = 0
+		if window.count(player) == 4:
+			score += 1000  # Immediate win
+		elif window.count(player) == 3 and window.count(0) == 1:
+			score += 100  # Potential win in next move
+		elif window.count(player) == 2 and window.count(0) == 2:
+			score += 10   # Potential to build a threat
+
+		if window.count(opponent) == 3 and window.count(0) == 1:
+			score -= 200  # Block opponent's immediate win
+		elif window.count(opponent) == 2 and window.count(0) == 2:
+			score -= 20   # Block opponent's potential threat
 
 		return score
 
@@ -261,10 +288,10 @@ class alphaBetaAI(connect4Player):
 		column_scores = []
 
 		for col in range(env.shape[1]):
-			if env.topPosition[col] >= 0:  # Check if the column is not full
-				row = env.topPosition[col]  # Get the first empty row in the column
-				score = value[row][col]  # Use the positional weight for the empty space
-				column_scores.append((col, score))  # Store column index and its score
+			if env.topPosition[col] >= 0:  
+				row = env.topPosition[col]  
+				score = value[row][col]  
+				column_scores.append((col, score)) 
 
 		# Sort columns by their scores in descending order
 		column_scores.sort(key=lambda x: x[1], reverse=True)
@@ -282,14 +309,13 @@ class alphaBetaAI(connect4Player):
 		if env.gameOver(move_dict["move"], 3 - self.position):
 			return -np.inf
 		if depth == 0:
-			return self.evaluationFunction(env, move_dict)
+			return self.evaluationFunction(env)
 		
-		possible = env.topPosition >= 0 # which columns have empty spaces
+		""" possible = env.topPosition >= 0 # which columns have empty spaces
 		indices = []
 		for i, p in enumerate(possible):
-			if p: indices.append(i)
+			if p: indices.append(i) """
 
-		# Sort moves based on their heuristic value (central columns first)
 		sortedColumns = self.sortColumnsByValue(env)
 		
 		value = -np.inf
@@ -307,14 +333,13 @@ class alphaBetaAI(connect4Player):
 		if env.gameOver(move_dict["move"], 3 - self.position):
 			return np.inf
 		if depth == 0:
-			return self.evaluationFunction(env, move_dict)
+			return self.evaluationFunction(env)
 		
-		possible = env.topPosition >= 0 # which columns have empty spaces
-		indices = []
+		""" possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = [] 
 		for i, p in enumerate(possible):
-			if p: indices.append(i)
+			if p: indices.append(i) """
 
-		# Sort moves based on their heuristic value (central columns first)
 		sortedColumns = self.sortColumnsByValue(env)
 
 		value = np.inf
@@ -330,11 +355,15 @@ class alphaBetaAI(connect4Player):
 
 
 	def play(self, env: connect4, move_dict: dict) -> None:
-		bestMove = 3  # Default move
-		maxDepth = 4  # Start with a shallow depth
+		_, count = np.unique(env.board, return_counts=True)
+		if count[0] == env.shape[0] * env.shape[1]:
+			move_dict["move"] = env.shape[1] // 2
+			return
+		bestMove = 3  
+		maxDepth = 0  
 
 		bestValue = -np.inf
-		for column in [i for i, p in enumerate(env.topPosition >= 0) if p]:
+		for column in self.sortColumnsByValue(env):
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
 			if envCopy.topPosition[column] >= 0:
@@ -343,7 +372,7 @@ class alphaBetaAI(connect4Player):
 				if value > bestValue:
 					bestValue = value
 					bestMove = column
-		maxDepth += 1  # Increase depth for the next iteration
+		maxDepth += 1  
 
 		move_dict["move"] = bestMove
 
