@@ -216,14 +216,40 @@ class minimaxAI(connect4Player):
 		print("I finished")
 
 class alphaBetaAI(connect4Player):
+
+	global value 
+	
+	value = [
+		[3,4,5,7,5,4,3],
+		[4,6,8,10,8,6,4],
+		[5,8,11,13,11,8,5],
+		[5,8,11,13,11,8,5],
+		[4,6,8,10,8,6,4],
+		[3,4,5,7,5,4,3],
+	]
+
 	def __init__(self, position, seed=0, CVDMode=False):
 		super().__init__(position, seed, CVDMode)
 		self.maxDepth = 3  # Start with a shallow depth
+
+	def evaluationFunction2(self, env:connect4) -> int:
+		for col in range(env.shape[1]):
+			row = env.topPosition[col]
+			if row >= 0:
+				return value[row][col]
 
 	def evaluationFunction(self, env: connect4) -> int:
 		player = self.position
 		opponent = 3 - player
 		score = 0
+
+		# Positional scoring
+		for row in range(env.shape[0]):
+			for col in range(env.shape[1]):
+				if env.board[row][col] == player:
+					score += value[row][col]
+				elif env.board[row][col] == opponent:
+					score -= value[row][col]
 
 		# Check all possible 4-in-a-row sequences
 		for row in range(env.shape[0]):
@@ -255,12 +281,14 @@ class alphaBetaAI(connect4Player):
 		if window.count(player) == 4:
 			score += 1000
 		elif window.count(player) == 3 and window.count(0) == 1:
-			score += 5
+			score += 100
 		elif window.count(player) == 2 and window.count(0) == 2:
-			score += 2
+			score += 10
 
 		if window.count(opponent) == 3 and window.count(0) == 1:
-			score -= 4
+			score -= 200
+		elif window.count(opponent) == 2 and window.count(0) == 2:
+			score -= 20
 
 		return score
 
@@ -270,29 +298,8 @@ class alphaBetaAI(connect4Player):
 			env.topPosition[column] -= 1
 
 	def MAX(self, env: connect4, depth, alpha, beta, move_dict: dict):
-		#if env.gameOver(move_dict["move"], self.position):
-		#	return -np.inf
-		if depth == 0:
-			return self.evaluationFunction(env)
-		
-		possible = env.topPosition >= 0 # which columns have empty spaces
-		indices = []
-		for i, p in enumerate(possible):
-			if p: indices.append(i)
-		
-		value = -np.inf
-		for column in indices:
-			envCopy = copy.deepcopy(env)
-			self.simulateMove(envCopy, column)
-			value = max(value, self.MIN(envCopy, depth-1, alpha, beta, move_dict))
-			if value >= beta: return value
-			alpha = max(alpha, value)
-			
-		return value
-		
-	def MIN(self, env: connect4, depth, alpha, beta, move_dict: dict):
-		#if env.gameOver(move_dict["move"], self.position):
-		#	return np.inf
+		if env.gameOver(move_dict["move"], self.position):
+			return -np.inf
 		if depth == 0:
 			return self.evaluationFunction(env)
 		
@@ -301,10 +308,47 @@ class alphaBetaAI(connect4Player):
 		for i, p in enumerate(possible):
 			if p: indices.append(i)
 
+		# Sort moves based on their heuristic value (central columns first)
+		indices.sort(key=lambda x: abs(x - 3))
+		
+		value = -np.inf
+		for column in indices:
+			envCopy = copy.deepcopy(env)
+			self.simulateMove(envCopy, column)
+
+			#if envCopy.topPosition[column] >= 0:
+				#if envCopy.gameOver(column, self.position):
+				#	return -np.inf
+				
+			value = max(value, self.MIN(envCopy, depth-1, alpha, beta, move_dict))
+			if value >= beta: return value
+			alpha = max(alpha, value)
+			
+		return value
+		
+	def MIN(self, env: connect4, depth, alpha, beta, move_dict: dict):
+		if env.gameOver(move_dict["move"], self.position):
+			return np.inf
+		if depth == 0:
+			return self.evaluationFunction(env)
+		
+		possible = env.topPosition >= 0 # which columns have empty spaces
+		indices = []
+		for i, p in enumerate(possible):
+			if p: indices.append(i)
+
+		# Sort moves based on their heuristic value (central columns first)
+		indices.sort(key=lambda x: abs(x - 3))
+
 		value = np.inf
 		for column in indices:
 			envCopy = copy.deepcopy(env)
 			self.simulateMove(envCopy, column)
+
+			#if envCopy.topPosition[column] >= 0:
+				#if envCopy.gameOver(column, self.position):
+				#	return -np.inf
+				
 			value = min(value, self.MAX(envCopy, depth-1, alpha, beta, move_dict))
 			if value <= alpha: return value
 			beta = min(beta, value)
@@ -315,21 +359,16 @@ class alphaBetaAI(connect4Player):
 	def play(self, env: connect4, move_dict: dict) -> None:
 		bestMove = 3  # Default move
 		#start_time = time.time()
-		maxDepth = 2  # Start with a shallow depth
-
-		if np.all(env.topPosition < 0):
-			print("BOARD IS FULL ---------------------------")
-			#move_dict["move"] = -1  # No valid moves left
-			return
+		maxDepth = 3  # Start with a shallow depth
 
 		#while time.time() - start_time < 2.5:  # Leave some buffer time
 		bestValue = -np.inf
 		for column in [i for i, p in enumerate(env.topPosition >= 0) if p]:
 			envCopy = copy.deepcopy(env)
-			self.simulateMove(env, column)
+			self.simulateMove(envCopy, column)
 			if envCopy.topPosition[column] >= 0:
 				move_dict['move'] = column
-				value = self.MAX(env, maxDepth, -np.inf, np.inf, move_dict)
+				value = self.MAX(envCopy, maxDepth, -np.inf, np.inf, move_dict)
 				if value > bestValue:
 					bestValue = value
 					bestMove = column
